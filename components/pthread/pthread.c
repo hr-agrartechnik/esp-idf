@@ -36,7 +36,7 @@ typedef struct esp_pthread_entry {
     enum esp_pthread_task_state state;          ///< pthread task state
     bool                        detached;       ///< True if pthread is detached
     void                       *retval;         ///< Value supplied to calling thread during join
-    void                       *task_arg;       ///< Task arguments
+    void                       *task_arg;       ///< Task arguments#
 } esp_pthread_t;
 
 /** pthread wrapper task arg */
