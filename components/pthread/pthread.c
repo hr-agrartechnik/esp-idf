@@ -36,7 +36,7 @@ typedef struct esp_pthread_entry {
     enum esp_pthread_task_state state;          ///< pthread task state
     bool                        detached;       ///< True if pthread is detached
     void                       *retval;         ///< Value supplied to calling thread during join
-    void                       *task_arg;       ///< Task arguments#
+    void                       *task_arg;       ///< Task arguments
 } esp_pthread_t;
 
 /** pthread wrapper task arg */
@@ -271,27 +271,39 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
     task_arg->func = start_routine;
     task_arg->arg = arg;
     pthread->task_arg = task_arg;
-    BaseType_t res = xTaskCreatePinnedToCore(&pthread_task_func,
-                                             task_name,
-                                             // stack_size is in bytes. This transformation ensures that the units are
-                                             // transformed to the units used in FreeRTOS.
-                                             // Note: float division of ceil(m / n) ==
-                                             //       integer division of (m + n - 1) / n
-                                             (stack_size + sizeof(StackType_t) - 1) / sizeof(StackType_t),
-                                             task_arg,
-                                             prio,
-                                             &xHandle,
-                                             core_id);
-
-    if (res != pdPASS) {
+    // stack_size is in bytes. This transformation ensures that the units are
+    // transformed to the units used in FreeRTOS.
+    // Note: float division of ceil(m / n) ==
+    //       integer division of (m + n - 1) / n
+    int size_stack = (stack_size + sizeof(StackType_t) - 1) / sizeof(StackType_t);
+    StackType_t *stack_for_task = (StackType_t *) heap_caps_calloc(1, size_stack, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (stack_for_task == NULL) {
         ESP_LOGE(TAG, "Failed to create task!");
         free(pthread);
         free(task_arg);
-        if (res == errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY) {
-            return ENOMEM;
-        } else {
-            return EAGAIN;
-        }
+    	return ENOMEM;
+    }
+    StaticTask_t *taskTC =  (StaticTask_t *) heap_caps_calloc(1, sizeof(StaticTask_t), MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT);
+    if (taskTC == NULL) {
+        ESP_LOGE(TAG, "Failed to create task!");
+        free(pthread);
+        free(task_arg);
+    	return ENOMEM;
+    }
+    xHandle = xTaskCreateStaticPinnedToCore(&pthread_task_func,
+                                             task_name,
+											 size_stack,
+                                             task_arg,
+                                             prio,
+											 stack_for_task,
+											 taskTC,
+                                             core_id);
+
+    if (xHandle == NULL) {
+        ESP_LOGE(TAG, "Failed to create task!");
+        free(pthread);
+        free(task_arg);
+        return EAGAIN;
     }
     pthread->handle = xHandle;
 
