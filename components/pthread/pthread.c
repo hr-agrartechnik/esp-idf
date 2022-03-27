@@ -220,6 +220,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
     }
 
     uint32_t stack_size = CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT;
+    bool externalmemory = false;
     BaseType_t prio = CONFIG_PTHREAD_TASK_PRIO_DEFAULT;
     BaseType_t core_id = get_default_pthread_core();
     const char *task_name = CONFIG_PTHREAD_TASK_NAME_DEFAULT;
@@ -229,6 +230,10 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
         if (pthread_cfg->stack_size) {
             stack_size = pthread_cfg->stack_size;
         }
+        if(pthread_cfg->externalmemoy){
+        	externalmemory = pthread_cfg->externalmemory;
+        }
+
         if (pthread_cfg->prio && pthread_cfg->prio < configMAX_PRIORITIES) {
             prio = pthread_cfg->prio;
         }
@@ -276,8 +281,8 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
     // Note: float division of ceil(m / n) ==
     //       integer division of (m + n - 1) / n
     int size_stack = (stack_size + sizeof(StackType_t) - 1) / sizeof(StackType_t);
-    StackType_t *stack_for_task = (StackType_t *) heap_caps_calloc(1, size_stack, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    ESP_LOGI(TAG, "init_task: current addr_stack = %p, stack_for_task = %p\n", esp_cpu_get_sp(), stack_for_task);
+    uint32_t memoryLocation = externalmemory ? MALLOC_CAP_SPIRAM : MALLOC_CAP_INTERNAL;
+    StackType_t *stack_for_task = (StackType_t *) heap_caps_calloc(1, size_stack, memoryLocation | MALLOC_CAP_8BIT);
     if (stack_for_task == NULL) {
         ESP_LOGE(TAG, "Failed to create task!");
         free(pthread);
