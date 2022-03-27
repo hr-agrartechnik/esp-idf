@@ -230,7 +230,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
         if (pthread_cfg->stack_size) {
             stack_size = pthread_cfg->stack_size;
         }
-        if(pthread_cfg->externalmemoy){
+        if(pthread_cfg->externalmemory){
         	externalmemory = pthread_cfg->externalmemory;
         }
 
