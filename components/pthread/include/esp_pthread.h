@@ -28,6 +28,7 @@ extern "C" {
 /** pthread configuration structure that influences pthread creation */
 typedef struct {
     size_t stack_size;  ///< The stack size of the pthread
+    bool externalmemory;
     size_t prio;        ///< The thread's priority
     bool inherit_cfg;   ///< Inherit this configuration further
     const char* thread_name;  ///< The thread name.
