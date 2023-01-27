@@ -38,6 +38,8 @@ typedef struct esp_pthread_entry {
     bool                        detached;       ///< True if pthread is detached
     void                       *retval;         ///< Value supplied to calling thread during join
     void                       *task_arg;       ///< Task arguments
+    StackType_t                *stack_for_task; ///< Task stack
+    StaticTask_t               *taskTC;         ///< Task taskTC
 } esp_pthread_t;
 
 /** pthread wrapper task arg */
@@ -121,6 +123,9 @@ static esp_pthread_t *pthread_find(TaskHandle_t task_handle)
 static void pthread_delete(esp_pthread_t *pthread)
 {
     SLIST_REMOVE(&s_threads_list, pthread, esp_pthread_entry, list_node);
+    free(pthread->task_arg);
+    free(pthread->stack_for_task);
+    free(pthread->taskTC);
     free(pthread);
 }
 
@@ -221,7 +226,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
     }
 
     uint32_t stack_size = CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT;
-    bool externalmemory = false;
+    uint32_t stack_alloc_caps = MALLOC_CAP_DEFAULT;
     BaseType_t prio = CONFIG_PTHREAD_TASK_PRIO_DEFAULT;
     BaseType_t core_id = get_default_pthread_core();
     const char *task_name = CONFIG_PTHREAD_TASK_NAME_DEFAULT;
@@ -231,8 +236,8 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
         if (pthread_cfg->stack_size) {
             stack_size = pthread_cfg->stack_size;
         }
-        if(pthread_cfg->externalmemory){
-        externalmemory = pthread_cfg->externalmemory;
+        if(pthread_cfg->stack_alloc_caps){
+            stack_alloc_caps = pthread_cfg->stack_alloc_caps;
         }
 
         if (pthread_cfg->prio && pthread_cfg->prio < configMAX_PRIORITIES) {
@@ -282,21 +287,23 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
     // Note: float division of ceil(m / n) ==
     //       integer division of (m + n - 1) / n
     int size_stack = (stack_size + sizeof(StackType_t) - 1) / sizeof(StackType_t);
-    uint32_t memoryLocation = externalmemory ? MALLOC_CAP_SPIRAM : MALLOC_CAP_INTERNAL;
-    StackType_t *stack_for_task = (StackType_t *) heap_caps_calloc(1, size_stack, memoryLocation | MALLOC_CAP_8BIT);
+    StackType_t *stack_for_task = (StackType_t *) heap_caps_calloc(1, size_stack, stack_alloc_caps | MALLOC_CAP_8BIT);
     if (stack_for_task == NULL) {
-        ESP_LOGE(TAG, "Failed to create task!");
+        ESP_LOGE(TAG, "Failed to allocate task stack!");
         free(pthread);
         free(task_arg);
     	return ENOMEM;
     }
+    pthread->stack_for_task = stack_for_task;
     StaticTask_t *taskTC =  (StaticTask_t *) heap_caps_calloc(1, sizeof(StaticTask_t), MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT);
     if (taskTC == NULL) {
         ESP_LOGE(TAG, "Failed to create task!");
         free(pthread);
         free(task_arg);
+        free(stack_for_task);
     	return ENOMEM;
     }
+    pthread->taskTC = taskTC;
     xHandle = xTaskCreateStaticPinnedToCore(&pthread_task_func,
                                              task_name,
 											 size_stack,
@@ -310,6 +317,8 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
         ESP_LOGE(TAG, "Failed to create task!");
         free(pthread);
         free(task_arg);
+        free(stack_for_task);
+        free(taskTC);
         return EAGAIN;
     }
     pthread->handle = xHandle;
