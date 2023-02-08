@@ -123,7 +123,9 @@ static esp_pthread_t *pthread_find(TaskHandle_t task_handle)
 static void pthread_delete(esp_pthread_t *pthread)
 {
     SLIST_REMOVE(&s_threads_list, pthread, esp_pthread_entry, list_node);
-    free(pthread->task_arg);
+	if (pthread->task_arg) {
+        free(pthread->task_arg);
+    }
     free(pthread->stack_for_task);
     free(pthread->taskTC);
     free(pthread);
@@ -446,9 +448,6 @@ void pthread_exit(void *value_ptr)
     esp_pthread_t *pthread = pthread_find(xTaskGetCurrentTaskHandle());
     if (!pthread) {
         assert(false && "Failed to find pthread for current task!");
-    }
-    if (pthread->task_arg) {
-        free(pthread->task_arg);
     }
     if (pthread->detached) {
         // auto-free for detached threads
