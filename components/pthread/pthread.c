@@ -378,6 +378,7 @@ int pthread_join(pthread_t thread, void **retval)
                 wait = true;
             } else { // thread has exited and task is already suspended, or about to be suspended
                 child_task_retval = pthread->retval;
+                vTaskDelete(handle);
                 pthread_delete(pthread);
             }
         }
@@ -391,10 +392,10 @@ int pthread_join(pthread_t thread, void **retval)
                 assert(false && "Failed to lock threads list!");
             }
             child_task_retval = pthread->retval;
+            vTaskDelete(handle);
             pthread_delete(pthread);
             xSemaphoreGive(s_threads_mux);
         }
-        vTaskDelete(handle);
     }
 
     if (retval) {
@@ -427,8 +428,8 @@ int pthread_detach(pthread_t thread)
         pthread->detached = true;
     } else {
         // pthread already stopped
-        pthread_delete(pthread);
         vTaskDelete(handle);
+        pthread_delete(pthread);
     }
     xSemaphoreGive(s_threads_mux);
     ESP_LOGV(TAG, "%s %p EXIT %d", __FUNCTION__, pthread, ret);
@@ -451,6 +452,7 @@ void pthread_exit(void *value_ptr)
     }
     if (pthread->detached) {
         // auto-free for detached threads
+        vTaskDelete(NULL);
         pthread_delete(pthread);
         detached = true;
     } else {
@@ -473,7 +475,7 @@ void pthread_exit(void *value_ptr)
     // do anything that might lock (such as printing to stdout)
 
     if (detached) {
-        vTaskDelete(NULL);
+
     } else {
         vTaskSuspend(NULL);
     }
